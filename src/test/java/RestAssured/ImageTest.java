@@ -1,44 +1,41 @@
 package RestAssured;
 
+import io.restassured.builder.MultiPartSpecBuilder;
 import io.restassured.path.json.JsonPath;
-import io.restassured.response.ResponseBodyExtractionOptions;
-import org.apache.commons.io.FileUtils;
+import io.restassured.specification.MultiPartSpecification;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Base64;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.core.IsNull.notNullValue;
 
 public class ImageTest extends BaseTest {
-    private final String PATH_TO_IMAGE = "src/test/resources/waterfall.jpg";
-    static String encodedFile;
     String uploadedImageDeleteHashId;
+    MultiPartSpecification multiPartSpecification;
 
     @BeforeEach
     void beforeTest() {
-        byte[] byteArray = getFileContent();
-        encodedFile = Base64.getEncoder().encodeToString(byteArray);
+        String base64Content = FileUtils.getContentAsBase64String(filename);
+        multiPartSpecification = new MultiPartSpecBuilder(base64Content)
+                .controlName("image")
+                .build();
     }
-
 
     @Test
     void uploadFileBase64Test() {
         uploadedImageDeleteHashId = given()
-                .headers("Authorization", token)
-                .multiPart("image", encodedFile)
-                .expect()
-                .body("success", is(true))
-                .body("data.id", is(notNullValue()))
+                .spec(requestSpecs)
+                .multiPart(multiPartSpecification)
                 .when()
                 .post("https://api.imgur.com/3/image")
                 .prettyPeek()
                 .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data.id", is(notNullValue()))
                 .extract()
                 .response()
                 .jsonPath()
@@ -48,41 +45,40 @@ public class ImageTest extends BaseTest {
     @Test
     void negativeUploadFileBase64Test() {
         given()
-                .headers("Authorization", token)
+                .spec(requestSpecs)
                 .multiPart("image", "123456")
-                .expect()
-                .body("success", is(false))
-                .statusCode(400)
                 .when()
                 .post("https://api.imgur.com/3/image")
-                .prettyPeek();
-        uploadedImageDeleteHashId=null;
+                .prettyPeek()
+                .then()
+                .spec(negativeResponseBaseSpecs)
+                .statusCode(400);
+        uploadedImageDeleteHashId = null;
     }
 
     @Test
     void withoutTokenUploadFileBase64Test() {
         uploadedImageDeleteHashId = null;
-                given()
-                .multiPart("image", encodedFile)
-                .expect()
-                .body("success", is(false))
-                .statusCode(401)
+        given()
+                .multiPart(multiPartSpecification)
                 .when()
-                .post("https://api.imgur.com/3/image");
+                .post("https://api.imgur.com/3/image")
+                .then()
+                .spec(negativeResponseBaseSpecs)
+                .statusCode(401);
     }
 
     @Test
     void uploadFileImageTest() {
         uploadedImageDeleteHashId = given()
-                .headers("Authorization", token)
-                .multiPart("image", encodedFile)
-                .expect()
-                .body("success", is(true))
-                .body("data.id", is(notNullValue()))
+                .spec(requestSpecs)
+                .multiPart("image", FileUtils.getFileContent(filename))
                 .when()
                 .post("https://api.imgur.com/3/image")
                 .prettyPeek()
                 .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data.id", is(notNullValue()))
                 .extract()
                 .response()
                 .jsonPath()
@@ -90,16 +86,15 @@ public class ImageTest extends BaseTest {
     }
 
     @Test
-    void imageDetailsTest(){
+    void imageDetailsTest() {
         JsonPath rspJson = given()
-                .headers("Authorization", token)
+                .spec(requestSpecs)
                 .multiPart("image", new File("src/test/resources/waterfall.jpg"))
-                .expect()
-                .statusCode(200)
                 .when()
-                .post("https://api.imgur.com/3/upload")
+                .post("https://api.imgur.com/3/image")
                 .prettyPeek()
                 .then()
+                .spec(positiveResponseBaseSpecs)
                 .extract()
                 .response()
                 .jsonPath();
@@ -110,198 +105,180 @@ public class ImageTest extends BaseTest {
                 .getString("data.id");
 
         given()
-                .headers("Authorization", token)
-                .expect()
-                .body("success", is(true))
-                .body("data.id", is(imageHash))
+                .spec(requestSpecs)
                 .when()
-                .get("https://api.imgur.com/3/image/{imageHash}", imageHash);
-
+                .get("https://api.imgur.com/3/image/{imageHash}", imageHash)
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data.id", is(imageHash));
     }
 
     @Test
-    void imageCountTest(){
+    void imageCountTest() {
         int cntBefore = given()
-                .headers("Authorization", token)
-                .expect()
-                .statusCode(200)
+                .spec(requestSpecs)
                 .when()
-                .get("https://api.imgur.com/3/account/{username}/images/count",username)
+                .get("https://api.imgur.com/3/account/{username}/images/count", username)
                 .prettyPeek()
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .extract()
                 .jsonPath()
                 .getInt("data");
 
         JsonPath rspJson = given()
-                .headers("Authorization", token)
-                .multiPart("image", new File("src/test/resources/waterfall.jpg"))
-                .expect()
-                .statusCode(200)
+                .spec(requestSpecs)
+                .multiPart(multiPartSpecification)
                 .when()
-                .post("https://api.imgur.com/3/upload")
+                .post("https://api.imgur.com/3/image")
                 .prettyPeek()
                 .then()
+                .spec(positiveResponseBaseSpecs)
                 .extract()
                 .response()
                 .jsonPath();
         uploadedImageDeleteHashId = rspJson
                 .getString("data.deletehash");
         given()
-                .headers("Authorization", token)
-                .expect()
-                .statusCode(200)
-                .body("data",is(cntBefore+1))
+                .spec(requestSpecs)
                 .when()
-                .get("https://api.imgur.com/3/account/{username}/images/count",username);
+                .get("https://api.imgur.com/3/account/{username}/images/count", username)
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data", is(cntBefore + 1));
     }
 
     @Test
-    void updateImageInformationTest(){
+    void updateImageInformationTest() {
         JsonPath rspJson = given()
-                .headers("Authorization", token)
-                .multiPart("image", new File("src/test/resources/waterfall.jpg"))
-                .expect()
-                .statusCode(200)
+                .spec(requestSpecs)
+                .multiPart(multiPartSpecification)
                 .when()
-                .post("https://api.imgur.com/3/upload")
+                .post("https://api.imgur.com/3/image")
                 .prettyPeek()
                 .then()
+                .spec(positiveResponseBaseSpecs)
                 .extract()
                 .response()
                 .jsonPath();
+
         uploadedImageDeleteHashId = rspJson
                 .getString("data.deletehash");
         String imageHash = rspJson
                 .getString("data.id");
+
         given()
-                .headers("Authorization", token)
-                .formParam("title","title")
-                .formParam("description","description")
-                .expect()
-                .statusCode(200)
-                .body("success", is (true))
+                .spec(requestSpecs)
+                .formParam("title", "title")
+                .formParam("description", "description")
                 .when()
                 .post("https://api.imgur.com/3/image/{imageHash}", imageHash)
                 .prettyPeek()
                 .then()
-                .extract()
-                .response()
-                .jsonPath();
-    }
-
-    @Test
-    void favoriteAnImageTest(){
-        JsonPath rspJson = given()
-                .headers("Authorization", token)
-                .multiPart("image", new File("src/test/resources/waterfall.jpg"))
-                .expect()
-                .statusCode(200)
-                .when()
-                .post("https://api.imgur.com/3/upload")
-                .prettyPeek()
-                .then()
-                .extract()
-                .response()
-                .jsonPath();
-        uploadedImageDeleteHashId = rspJson
-                .getString("data.deletehash");
-        String imageHash = rspJson
-                .getString("data.id");
-        given()
-                .headers("Authorization", token)
-                .expect()
-                .statusCode(200)
-                .body("success", is (true))
-                .body("data", is("favorited"))
-                .when()
-                .post("https://api.imgur.com/3/image/{imageHash}/favorite", imageHash)
-                .prettyPeek()
-                .then()
-                .extract()
-                .response()
-                .jsonPath();
-    }
-
-    @Test
-    void imageCheckFav(){
-        JsonPath rspJson = given()
-                .headers("Authorization", token)
-                .multiPart("image", new File("src/test/resources/waterfall.jpg"))
-                .expect()
-                .statusCode(200)
-                .when()
-                .post("https://api.imgur.com/3/upload")
-                .prettyPeek()
-                .then()
-                .extract()
-                .response()
-                .jsonPath();
-
-        uploadedImageDeleteHashId = rspJson
-                .getString("data.deletehash");
-        String imageHash = rspJson
-                .getString("data.id");
-        Boolean favBefore=rspJson
-                .getBoolean("data.favorite");
-        given()
-                .headers("Authorization", token)
-                .expect()
-                .statusCode(200)
-                .body("success", is (true))
-                .body("data", is("favorited"))
-                .when()
-                .post("https://api.imgur.com/3/image/{imageHash}/favorite", imageHash)
-                .prettyPeek()
-                .then()
-                .extract()
-                .response()
-                .jsonPath();
-
-        given()
-                .headers("Authorization", token)
-                .expect()
+                .spec(positiveResponseBaseSpecs)
                 .body("success", is(true))
-                .body("data.favorite", is  (!favBefore))
-                .when()
-                .get("https://api.imgur.com/3/image/{imageHash}", imageHash);
+                .extract()
+                .response()
+                .jsonPath();
+    }
 
+    @Test
+    void favoriteAnImageTest() {
+        JsonPath rspJson = given()
+                .spec(requestSpecs)
+                .multiPart(multiPartSpecification)
+                .when()
+                .post("https://api.imgur.com/3/image")
+                .prettyPeek()
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .extract()
+                .response()
+                .jsonPath();
+
+        uploadedImageDeleteHashId = rspJson
+                .getString("data.deletehash");
+        String imageHash = rspJson
+                .getString("data.id");
+
+        given()
+                .spec(requestSpecs)
+                .when()
+                .post("https://api.imgur.com/3/image/{imageHash}/favorite", imageHash)
+                .prettyPeek()
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data", is("favorited"))
+                .extract()
+                .response()
+                .jsonPath();
+    }
+
+    @Test
+    void imageCheckFav() {
+        JsonPath rspJson = given()
+                .spec(requestSpecs)
+                .multiPart(multiPartSpecification)
+                .when()
+                .post("https://api.imgur.com/3/image")
+                .prettyPeek()
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .extract()
+                .response()
+                .jsonPath();
+
+        uploadedImageDeleteHashId = rspJson
+                .getString("data.deletehash");
+        String imageHash = rspJson
+                .getString("data.id");
+        Boolean favBefore = rspJson
+                .getBoolean("data.favorite");
+
+        given()
+                .spec(requestSpecs)
+                .when()
+                .post("https://api.imgur.com/3/image/{imageHash}/favorite", imageHash)
+                .prettyPeek()
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data", is("favorited"))
+                .extract()
+                .response()
+                .jsonPath();
+
+        given()
+                .spec(requestSpecs)
+                .when()
+                .get("https://api.imgur.com/3/image/{imageHash}", imageHash)
+                .then()
+                .spec(positiveResponseBaseSpecs)
+                .body("data.favorite", is(!favBefore));
     }
 
     //Imgur позволяет удалять изображения, которых не существует
     @Test
-    void deleteNotExistImage(){
+    void deleteNotExistImage() {
         given()
-                    .headers("Authorization", token)
-                    .expect()
-                    .statusCode(200)
-                    .when()
-                    .delete("https://api.imgur.com/3/image/{imageDeleteHash}",  "1234567")
-                    .prettyPeek()
-                    .then();
+                .spec(requestSpecs)
+                .when()
+                .delete("https://api.imgur.com/3/image/{imageDeleteHash}", "1234567")
+                .prettyPeek()
+                .then()
+                .spec(positiveResponseBaseSpecs);
     }
 
     @AfterEach
     void tearDown() {
-        if ( uploadedImageDeleteHashId!=null) {
+        if (uploadedImageDeleteHashId != null) {
             given()
-                    .headers("Authorization", token)
+                    .spec(requestSpecs)
                     .when()
                     .delete("https://api.imgur.com/3/account/{username}/image/{deleteHash}", username, uploadedImageDeleteHashId)
                     .prettyPeek()
                     .then()
-                    .statusCode(200);
+                    .spec(positiveResponseBaseSpecs);
         }
     }
-
-    private byte[] getFileContent() {
-        byte[] byteArray = new byte[0];
-        try {
-            byteArray = FileUtils.readFileToByteArray(new File(PATH_TO_IMAGE));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return byteArray;
-    }
-
-
 }
 
