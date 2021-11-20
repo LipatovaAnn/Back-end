@@ -1,0 +1,10 @@
+##Список тестов
+
+1. Можно создать продукт - createProductTest
+2. Нельзя создать продукт, с id!=0 - createProductWithIdTest
+3. Можно получить детали существующего продукта по Id - getProductTest
+4. Нельзя получить детали несуществующего продукта - getProductTest
+3. Можно обновить существующий продукт - updateProductTest
+4. Нельзя обновить несуществующий продукт - updateProductWithoutIdTest
+5. Нельзя оставить обязательнын поля пустыми при обновлении существующего продукта - updateProductWithoutRequiredFieldsTest
+6. Можно получить список продуктов (возвращает ошибку) - getAllProductsTest
