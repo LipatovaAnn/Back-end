@@ -10,7 +10,7 @@ public interface ProductService {
     Call<Product[]> getProducts();
 
     @GET("products/{id}")
-    Call<Product> getProduct(@Path("id") int id);
+    Call<Product> getProduct(@Path("id") long id);
 
     @POST("products")
     Call<Product> createProduct(@Body Product createProductRequest);
@@ -19,6 +19,6 @@ public interface ProductService {
     Call<Product> updateProduct(@Body Product updateProductRequest);
 
     @DELETE("products/{id}")
-    Call<ResponseBody> deleteProduct(@Path("id") int id);
+    Call<ResponseBody> deleteProduct(@Path("id") long id);
 
 }

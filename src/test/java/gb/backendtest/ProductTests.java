@@ -1,8 +1,9 @@
 package gb.backendtest;
 
 import com.github.javafaker.Faker;
+import gb.backendtest.model.Products;
+import gb.backendtest.model.ProductsExample;
 import lombok.SneakyThrows;
-import okhttp3.ResponseBody;
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.AfterEach;
@@ -17,7 +18,7 @@ public class ProductTests {
     Product product;
     Faker faker = new Faker();
 
-    int id;
+    long id;
 
     @BeforeAll
     static void beforeAll() {
@@ -33,20 +34,32 @@ public class ProductTests {
                 .withPrice((int) (Math.random() * 10000));
     }
 
+    private ProductDbService getService() {
+        return new ProductDbService();
+    }
+
     @Test
     @SneakyThrows
     void createProductTest() {
-        Response<Product> response = productService.createProduct(product)
+        int count = getService().countProducts(new ProductsExample());
+
+        Response<Product> response = productService.createProduct(product.withId(null))
                 .execute();
         id = response.body().getId();
         MatcherAssert.assertThat(response.isSuccessful(), CoreMatchers.is(true));
+
+        int newCount = getService().countProducts(new ProductsExample());
+        System.out.println(count);
+        System.out.println(newCount);
+        boolean countIncreased = (newCount - count) > 0;
+        MatcherAssert.assertThat(countIncreased, CoreMatchers.is(true));
     }
 
 
     @Test
     @SneakyThrows
     void createProductWithIdTest() {
-        Response<Product> response = productService.createProduct(product.withId(123))
+        Response<Product> response = productService.createProduct(product.withId(123l))
                 .execute();
         MatcherAssert.assertThat(response.code(), CoreMatchers.is(400));
         id = 0;
@@ -83,16 +96,19 @@ public class ProductTests {
         MatcherAssert.assertThat(response.isSuccessful(), CoreMatchers.is(true));
 
         product = product.withId(id);
-
-        response = productService.updateProduct(product.withTitle("Update title"))
+        String newTitle = "Update title";
+        response = productService.updateProduct(product.withTitle(newTitle))
                 .execute();
-        MatcherAssert.assertThat( response.isSuccessful(), CoreMatchers.is(true));
+        MatcherAssert.assertThat(response.isSuccessful(), CoreMatchers.is(true));
+
+        Products p = getService().getProductByPrimaryKey(id);
+        MatcherAssert.assertThat(p.getTitle(), CoreMatchers.is(newTitle));
     }
 
     @Test
     @SneakyThrows
     void updateProductWithoutIdTest() {
-        Response<Product> response = productService.updateProduct(product.withId(0))
+        Response<Product> response = productService.updateProduct(product.withId(null))
                 .execute();
         MatcherAssert.assertThat(response.code(), CoreMatchers.is(400));
         id = 0;
@@ -124,16 +140,16 @@ public class ProductTests {
     @Test
     @SneakyThrows
     void getAllProductsTest() {
-        Response<Product[]> response = productService.getProducts().execute();
-        MatcherAssert.assertThat(response.isSuccessful(), CoreMatchers.is(true));
+        int count = getService().countProducts(new ProductsExample());
+        MatcherAssert.assertThat("Returned any products", count, CoreMatchers.not(0));
+        id = 0;
     }
 
     @SneakyThrows
     @AfterEach
     void tearDown() {
         if (id > 0) {
-            Response<ResponseBody> response = productService.deleteProduct(id).execute();
-            MatcherAssert.assertThat(response.isSuccessful(), CoreMatchers.is(true));
+            getService().deleteProduct(id);
         }
     }
 }
